@@ -6,19 +6,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.9'
+
+      - name: Download Gradle directly
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip
+          unzip -q gradle-8.9-bin.zip -d $HOME/gradle
+          echo "$HOME/gradle/gradle-8.9/bin" >> $GITHUB_PATH
+
+      - name: Check Android SDK
+        run: echo "ANDROID_HOME=$ANDROID_HOME"
+
       - name: Build debug APK
-        run: gradle -p ScatterSync/scatter-sync :app:assembleDebug --no-daemon
+        run: gradle :app:assembleDebug --no-daemon
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: ScatterSync-debug-apk
-          path: ScatterSync/scatter-sync/app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/debug/*.apk
