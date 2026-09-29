@@ -140,8 +140,8 @@ class MainActivity : ComponentActivity() {
             lifecycleScope.launch {
                 val summary = try {
                     SyncEngine.run(this@MainActivity, manual = true)
-                } catch (e: Exception) {
-                    "Sync error: ${e.message}"
+                } catch (e: Throwable) {
+                    "Sync error: ${e.javaClass.simpleName}: ${e.message ?: "(no message)"}"
                 }
                 updateStatus(summary)
             }
