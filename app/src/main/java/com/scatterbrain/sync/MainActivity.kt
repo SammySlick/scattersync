@@ -2,6 +2,7 @@ package com.scatterbrain.sync
 
 import android.widget.ScrollView
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.view.ViewGroup
@@ -24,7 +25,7 @@ class MainActivity : ComponentActivity() {
 
     // Bump with every build so the status screen shows WHICH apk is running.
     // Fixes the "which build am I actually testing?" guessing game.
-    private val BUILD_TAG = "build 2026-09-29 #16 (scrollable status + copy log)"
+    private val BUILD_TAG = "build 2026-09-30 #17 (foreground-service sync)"
 
     private lateinit var status: TextView
 
@@ -35,6 +36,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Ask for notification permission (Android 13+) so the foreground-sync
+        // notification can show — without it the FGS exemption may not hold.
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 7)
+        }
 
         status = TextView(this).apply {
             setPadding(48, 48, 48, 24)
