@@ -7,6 +7,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
@@ -83,7 +84,19 @@ class MainActivity : ComponentActivity() {
         }
 
         grantBtn.setOnClickListener {
-            permissionRequest.launch(PERMISSIONS)
+            val sdkStatus = HealthConnectClient.getSdkStatus(this@MainActivity)
+            if (sdkStatus == HealthConnectClient.SDK_AVAILABLE) {
+                permissionRequest.launch(PERMISSIONS)
+            } else {
+                val why = when (sdkStatus) {
+                    HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ->
+                        "Health Connect needs updating — open the Play Store, search \"Health Connect\" by Android, install/update it, then come back."
+                    else ->
+                        "Health Connect is not available on this phone (Android version too old or module missing)."
+                }
+                Toast.makeText(this@MainActivity, why, Toast.LENGTH_LONG).show()
+                updateStatus(why)
+            }
         }
 
         saveBtn.setOnClickListener {
@@ -126,13 +139,23 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun refreshStatus() {
+        val sdkStatus = HealthConnectClient.getSdkStatus(this@MainActivity)
+        val sdkLine = when (sdkStatus) {
+            HealthConnectClient.SDK_AVAILABLE -> "Health Connect: available."
+            HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> "Health Connect: needs install/update from Play Store."
+            else -> "Health Connect: NOT available on this phone."
+        }
+        if (sdkStatus != HealthConnectClient.SDK_AVAILABLE) {
+            status.text = "$sdkLine\nTap Grant for details. Install/update Health Connect, then reopen this app."
+            return
+        }
         val client = HealthConnectClient.getOrCreate(this@MainActivity)
         val granted = client.permissionController.getGrantedPermissions()
         val missing = PERMISSIONS.filterNot { it in granted }
         val permLine = if (missing.isEmpty())
             "All Health Connect permissions granted."
         else "Missing ${missing.size} permissions — tap Grant."
-        status.text = "$permLine\nServer: ${Prefs.server(this@MainActivity)}"
+        status.text = "$sdkLine\n$permLine\nServer: ${Prefs.server(this@MainActivity)}"
     }
 
     companion object {
