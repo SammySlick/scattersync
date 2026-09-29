@@ -1,5 +1,6 @@
 package com.scatterbrain.sync
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
 import android.view.ViewGroup
@@ -57,6 +58,29 @@ class MainActivity : ComponentActivity() {
         })
         root.addView(status)
         root.addView(grantBtn)
+
+        val settingsBtn = Button(this).apply { text = "Open Health Connect settings (grant manually)" }
+        settingsBtn.setOnClickListener {
+            try {
+                // Newer action first, then the module app's own settings as fallback
+                val intents = listOf(
+                    Intent("android.health.connect.action.HEALTH_HOME_SETTINGS"),
+                    Intent("android.health.connect.action.MANAGE_HEALTH_DATA"),
+                    Intent().setClassName("com.google.android.apps.healthdata", "com.google.android.apps.healthdata.settings.SettingsActivity")
+                )
+                var launched = false
+                for (i in intents) {
+                    try {
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(i); launched = true; break
+                    } catch (_: Exception) { }
+                }
+                if (!launched) updateStatus("Could not open Health Connect settings — find it in your app drawer and grant permissions to ScatterSync there.")
+            } catch (e: Exception) {
+                updateStatus("Open HC settings failed: ${e.message}")
+            }
+        }
+        root.addView(settingsBtn)
         root.addView(TextView(this).apply {
             text = "Server settings"
             textSize = 12f
@@ -86,7 +110,12 @@ class MainActivity : ComponentActivity() {
         grantBtn.setOnClickListener {
             val sdkStatus = HealthConnectClient.getSdkStatus(this@MainActivity)
             if (sdkStatus == HealthConnectClient.SDK_AVAILABLE) {
-                permissionRequest.launch(PERMISSIONS)
+                try {
+                    permissionRequest.launch(PERMISSIONS)
+                } catch (e: Exception) {
+                    updateStatus("Permission dialog failed to open: ${e.javaClass.simpleName}: ${e.message}\nUse the settings button below instead.")
+                    Toast.makeText(this@MainActivity, "Dialog failed: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             } else {
                 val why = when (sdkStatus) {
                     HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ->
