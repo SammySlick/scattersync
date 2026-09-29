@@ -25,6 +25,12 @@ object SyncEngine {
         "RestingHeartRate" to RestingHeartRateRecord::class,
         "BasalMetabolicRate" to BasalMetabolicRateRecord::class,
         "Nutrition" to NutritionRecord::class,
+        "HRV" to HrvRecord::class,
+        "OxygenSaturation" to OxygenSaturationRecord::class,
+        "RespiratoryRate" to RespiratoryRateRecord::class,
+        "Vo2Max" to Vo2MaxRecord::class,
+        "Distance" to DistanceRecord::class,
+        "FloorsClimbed" to FloorsClimbedRecord::class,
     )
 
     private const val PAGE = 5000      // max records per read page
@@ -135,7 +141,13 @@ object SyncEngine {
             }
             is SleepSessionRecord -> {
                 o.put("startTime", iso(rec.startTime)); o.put("endTime", iso(rec.endTime))
-                o.put("data", JSONObject())
+                val d = JSONObject()
+                if (rec.notes != null) d.put("notes", rec.notes)
+                val st = JSONArray()
+                for (g in rec.stages) {
+                    st.put(JSONObject().put("startTime", iso(g.startTime)).put("endTime", iso(g.endTime)).put("stage", g.stage.name))
+                }
+                d.put("stages", st); o.put("data", d)
             }
             is WeightRecord -> {
                 o.put("startTime", iso(rec.time)); o.put("endTime", iso(rec.time))
@@ -166,6 +178,38 @@ object SyncEngine {
                 rec.totalCarbohydrate?.let { d.put("carbs", it.inGrams) }
                 rec.totalFat?.let { d.put("fat", it.inGrams) }
                 o.put("data", d)
+            }
+            is HrvRecord -> {
+                o.put("startTime", iso(rec.startTime)); o.put("endTime", iso(rec.endTime))
+                val d = JSONObject()
+                val s = JSONArray()
+                for (e in rec.samples) {
+                    val en = JSONObject().put("time", iso(e.time))
+                    e.rmssdMilliSeconds?.let { en.put("rmssd", it) }
+                    e.sdnnMilliSeconds?.let { en.put("sdnn", it) }
+                    s.put(en)
+                }
+                d.put("samples", s); o.put("data", d)
+            }
+            is OxygenSaturationRecord -> {
+                o.put("startTime", iso(rec.time)); o.put("endTime", iso(rec.time))
+                o.put("data", JSONObject().put("pct", rec.percentage.value))
+            }
+            is RespiratoryRateRecord -> {
+                o.put("startTime", iso(rec.time)); o.put("endTime", iso(rec.time))
+                o.put("data", JSONObject().put("rate", rec.rate))
+            }
+            is Vo2MaxRecord -> {
+                o.put("startTime", iso(rec.time)); o.put("endTime", iso(rec.time))
+                o.put("data", JSONObject().put("vo2max", rec.vo2MillilitersPerMinuteKilogram))
+            }
+            is DistanceRecord -> {
+                o.put("startTime", iso(rec.startTime)); o.put("endTime", iso(rec.endTime))
+                o.put("data", JSONObject().put("meters", rec.distance.inMeters))
+            }
+            is FloorsClimbedRecord -> {
+                o.put("startTime", iso(rec.startTime)); o.put("endTime", iso(rec.endTime))
+                o.put("data", JSONObject().put("floors", rec.floors))
             }
             else -> { o.put("data", JSONObject()) }
         }
