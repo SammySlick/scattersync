@@ -33,7 +33,7 @@ object SyncEngine {
 
     suspend fun run(ctx: Context, manual: Boolean): String {
         var token: String? = Prefs.token(ctx)
-        if (token == null) {
+        if (token == null || token.isEmpty()) {
             token = ApiClient.login(ctx) ?: return "Login failed — check server URL, username and password."
             Prefs.setToken(ctx, token)
         }
@@ -154,21 +154,22 @@ object SyncEngine {
             }
             is BasalMetabolicRateRecord -> {
                 o.put("time", iso(r.time))
-                o.put("energy", energyJson(r.energy))
+                o.put("basalMetabolicRate", JSONObject().put("inWatts", r.basalMetabolicRate.inWatts))
+                o.put("kilocaloriesPerDay", r.kilocaloriesPerDay)
             }
             is NutritionRecord -> {
                 o.put("startTime", iso(r.startTime)); o.put("endTime", iso(r.endTime))
                 if (r.name != null) o.put("name", r.name)
                 o.put("mealType", r.mealType)
+                if (r.grams != null) o.put("grams", r.grams)
                 val nutrients = JSONObject()
-                for ((nutrient, total) in r.nutrients) {
-                    when {
-                        nutrient == NutritionRecord.Nutrient.ENERGY && total is Energy ->
-                            nutrients.put("energy", energyJson(total))
-                        total is Mass -> nutrients.put(nutrient.name, JSONObject().put("inGrams", total.inGrams))
-                        total is Energy -> nutrients.put(nutrient.name, energyJson(total))
-                    }
-                }
+                r.energy?.let { nutrients.put("energy", energyJson(it)) }
+                r.protein?.let { nutrients.put("protein", JSONObject().put("inGrams", it.inGrams)) }
+                r.totalCarbohydrate?.let { nutrients.put("carbohydrates", JSONObject().put("inGrams", it.inGrams)) }
+                r.totalFat?.let { nutrients.put("fat", JSONObject().put("inGrams", it.inGrams)) }
+                r.sugar?.let { nutrients.put("sugar", JSONObject().put("inGrams", it.inGrams)) }
+                r.dietaryFiber?.let { nutrients.put("fiber", JSONObject().put("inGrams", it.inGrams)) }
+                r.sodium?.let { nutrients.put("sodium", JSONObject().put("inGrams", it.inGrams)) }
                 o.put("nutrients", nutrients)
             }
             else -> throw IllegalArgumentException("Unhandled record type $methodName")
