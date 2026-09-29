@@ -8,6 +8,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.*
@@ -78,11 +79,11 @@ class MainActivity : ComponentActivity() {
             Prefs.setServer(this@MainActivity, urlField.text.toString().trim())
             Prefs.setUsername(this@MainActivity, userField.text.toString().trim())
             Prefs.setPassword(this@MainActivity, passField.text.toString())
-            Prefs.setToken(this@MainActivity, null)
+            Prefs.setToken(this@MainActivity, "")
         }
 
         grantBtn.setOnClickListener {
-            permissionRequest.launch(PERMISSIONS.toTypedArray())
+            permissionRequest.launch(PERMISSIONS)
         }
 
         saveBtn.setOnClickListener {
@@ -126,7 +127,7 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun refreshStatus() {
         val client = HealthConnectClient.getOrCreate(this@MainActivity)
-        val granted = HealthPermission.getGrantedPermissions(this@MainActivity)
+        val granted = HealthPermission.getGrantedPermissions(client)
         val missing = PERMISSIONS.filterNot { it in granted }
         val permLine = if (missing.isEmpty())
             "All Health Connect permissions granted."
