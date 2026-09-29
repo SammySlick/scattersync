@@ -2,36 +2,53 @@ package com.scatterbrain.sync
 
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.*
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import kotlin.reflect.KClass
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
-import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
 object SyncEngine {
 
-    private val typeClasses: List<Pair<String, Class<out Record>>> = listOf(
-        "HeartRate" to HeartRateRecord::class.java,
-        "Steps" to StepsRecord::class.java,
-        "SleepSession" to SleepSessionRecord::class.java,
-        "Weight" to WeightRecord::class.java,
-        "BodyFat" to BodyFatRecord::class.java,
-        "ExerciseSession" to ExerciseSessionRecord::class.java,
-        "TotalCaloriesBurned" to TotalCaloriesBurnedRecord::class.java,
-        "RestingHeartRate" to RestingHeartRateRecord::class.java,
-        "BasalMetabolicRate" to BasalMetabolicRateRecord::class.java,
-        "Nutrition" to NutritionRecord::class.java,
+    val typeClasses: Map<String, KClass<out Record>> = mapOf(
+        "HeartRate" to HeartRateRecord::class,
+        "Steps" to StepsRecord::class,
+        "SleepSession" to SleepSessionRecord::class,
+        "Weight" to WeightRecord::class,
+        "BodyFat" to BodyFatRecord::class,
+        "ExerciseSession" to ExerciseSessionRecord::class,
+        "TotalCaloriesBurned" to TotalCaloriesBurnedRecord::class,
+        "RestingHeartRate" to RestingHeartRateRecord::class,
+        "BasalMetabolicRate" to BasalMetabolicRateRecord::class,
+        "Nutrition" to NutritionRecord::class,
     )
 
     private const val PAGE = 5000      // max records per read page
     private const val CHUNK = 50       // records per upload POST
 
-    suspend fun syncAll(ctx: Context, client: HealthConnectClient, token: String): String {
+    suspend fun run(ctx: Context, manual: Boolean = false): String {
+        if (HealthConnectClient.getSdkStatus(ctx) != HealthConnectClient.SDK_AVAILABLE) {
+            return "Health Connect not available — cannot sync."
+        }
+        if (Prefs.username(ctx).isBlank() || Prefs.password(ctx).isBlank()) {
+            return "No server credentials — fill in username and password, Save settings, then Sync now."
+        }
+        val client = HealthConnectClient.getOrCreate(ctx)
         val sb = StringBuilder()
         val now = Instant.now()
+        var token = Prefs.token(ctx) ?: ""
+        if (token.isBlank()) {
+            token = try {
+                ApiClient.login(ctx)
+            } catch (e: Exception) {
+                return "Login failed: ${e.message} (check server URL, username, password)"
+            }
+            Prefs.setToken(ctx, token)
+        }
         for ((methodName, kclass) in typeClasses) {
             val last = Prefs.lastSyncMs(ctx, methodName)
             val start = if (last == 0L) now.minus(30, ChronoUnit.DAYS) else Instant.ofEpochMilli(last)
