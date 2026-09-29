@@ -48,51 +48,42 @@ object SyncEngine {
         for ((methodName, kclass) in typeClasses) {
             val last = Prefs.lastSyncMs(ctx, methodName)
             val start = if (last == 0L) now.minus(30, ChronoUnit.DAYS) else Instant.ofEpochMilli(last)
-            val records = readAll(client, kclass, start, now)
-            if (records.isEmpty()) {
-                sb.append("$methodName: 0 new\n")
-                continue
-            }
+            // STREAMING: read one page at a time, upload, discard. Never hold
+            // the whole month in memory (OOM on full backfill otherwise).
+            var pageToken: String? = null
             var uploaded = 0
-            var ok = true
-            for (chunk in records.chunked(50)) {
-                val arr = JSONArray()
-                for (r in chunk) arr.put(toJson(r, methodName))
-                val err = ApiClient.sync(ctx, methodName, arr.toString(), tok)
-                if (err != null) { sb.append("$methodName chunk failed: $err\n"); ok = false; break }
-                uploaded += chunk.size
-            }
-            if (ok) {
+            var error: String? = null
+            do {
+                val resp = client.readRecords(
+                    ReadRecordsRequest(
+                        recordType = kclass,
+                        timeRangeFilter = TimeRangeFilter.between(start, now),
+                        pageSize = 500,
+                        pageToken = pageToken
+                    )
+                )
+                // convert this page to JSON, upload in chunks of 50, then drop
+                val jsons = resp.records.map { toJson(it, methodName).toString() }
+                var i = 0
+                while (i < jsons.size && error == null) {
+                    val chunk = jsons.subList(i, minOf(i + 50, jsons.size))
+                    val arr = JSONArray()
+                    for (s in chunk) arr.put(s)
+                    val err = ApiClient.sync(ctx, methodName, arr.toString(), tok)
+                    if (err != null) { error = err; break }
+                    uploaded += chunk.size
+                    i += 50
+                }
+                pageToken = if (error == null) resp.pageToken else null
+            } while (pageToken != null)
+            if (error == null) {
                 Prefs.setLastSyncMs(ctx, methodName, now.toEpochMilli())
                 sb.append("$methodName: $uploaded uploaded\n")
             } else {
-                sb.append("$methodName: ERROR after $uploaded (will retry next sync)\n")
+                sb.append("$methodName: ERROR after $uploaded: $error\n")
             }
         }
         sb.toString()
-    }
-
-    private suspend fun readAll(
-        client: HealthConnectClient,
-        kclass: kotlin.reflect.KClass<out Record>,
-        start: Instant,
-        end: Instant
-    ): List<Record> {
-        val all = mutableListOf<Record>()
-        var pageToken: String? = null
-        do {
-            val resp = client.readRecords(
-                ReadRecordsRequest(
-                    recordType = kclass,
-                    timeRangeFilter = TimeRangeFilter.between(start, end),
-                    pageSize = 1000,
-                    pageToken = pageToken
-                )
-            )
-            all.addAll(resp.records)
-            pageToken = resp.pageToken
-        } while (pageToken != null)
-        return all
     }
 
     private fun iso(i: Instant): String =
