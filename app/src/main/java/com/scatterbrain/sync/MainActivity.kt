@@ -23,7 +23,7 @@ class MainActivity : ComponentActivity() {
 
     // Bump with every build so the status screen shows WHICH apk is running.
     // Fixes the "which build am I actually testing?" guessing game.
-    private val BUILD_TAG = "build 2026-09-29 #14 (dataOrigin + IO + 16 types)"
+    private val BUILD_TAG = "build 2026-09-29 #15 (real JSON objects)"
 
     private lateinit var status: TextView
 
