@@ -1,5 +1,6 @@
 package com.scatterbrain.sync
 
+import android.widget.ScrollView
 import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
@@ -23,7 +24,7 @@ class MainActivity : ComponentActivity() {
 
     // Bump with every build so the status screen shows WHICH apk is running.
     // Fixes the "which build am I actually testing?" guessing game.
-    private val BUILD_TAG = "build 2026-09-29 #15 (real JSON objects)"
+    private val BUILD_TAG = "build 2026-09-29 #16 (scrollable status + copy log)"
 
     private lateinit var status: TextView
 
@@ -39,7 +40,15 @@ class MainActivity : ComponentActivity() {
             setPadding(48, 48, 48, 24)
             textSize = 14f
             text = "Starting…"
+            isLongClickable = true
         }
+        status.setOnLongClickListener {
+            val cb = getSystemService(android.content.ClipboardManager::class.java)
+            cb.setPrimaryClip(android.content.ClipData.newPlainText("ScatterSync log", status.text))
+            android.widget.Toast.makeText(this, "Log copied — paste it to Terry", android.widget.Toast.LENGTH_LONG).show()
+            true
+        }
+        val scroll = ScrollView(this).apply { addView(status) }
 
         val urlField = EditText(this).apply { hint = "Server URL"; setText(Prefs.server(this@MainActivity)) }
         val userField = EditText(this).apply { hint = "Username"; setText(Prefs.username(this@MainActivity)) }
@@ -60,7 +69,8 @@ class MainActivity : ComponentActivity() {
             gravity = Gravity.CENTER
             setPadding(0, 32, 0, 8)
         })
-        root.addView(status)
+        root.addView(scroll, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         root.addView(grantBtn)
 
         val settingsBtn = Button(this).apply { text = "Open Health Connect settings (grant manually)" }
