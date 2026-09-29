@@ -5,6 +5,8 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.*
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import androidx.health.connect.client.units.Energy
+import androidx.health.connect.client.units.Mass
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
@@ -12,12 +14,11 @@ import java.time.temporal.ChronoUnit
 
 /**
  * Reads Health Connect (paginated — ALL pages, no 1,000 cap) and uploads
- * to the HCGateway-compatible server. One shared backfill start: 30 days.
+ * to the HCGateway-compatible server. Backfills 30 days on first sync per type.
  */
 object SyncEngine {
 
-    // server method name -> Health Connect record class
-    val typeClasses = mapOf(
+    val typeClasses: Map<String, kotlin.reflect.KClass<out Record>> = mapOf(
         "HeartRate" to HeartRateRecord::class,
         "Steps" to StepsRecord::class,
         "SleepSession" to SleepSessionRecord::class,
@@ -30,14 +31,13 @@ object SyncEngine {
         "Nutrition" to NutritionRecord::class
     )
 
-    fun lastSyncSummary(): String = "" // filled by MainActivity via Prefs.summary()
-
     suspend fun run(ctx: Context, manual: Boolean): String {
-        var token = Prefs.token(ctx)
+        var token: String? = Prefs.token(ctx)
         if (token == null) {
             token = ApiClient.login(ctx) ?: return "Login failed — check server URL, username and password."
             Prefs.setToken(ctx, token)
         }
+        val tok = token!!
 
         val client = HealthConnectClient.getOrCreate(ctx)
         val now = Instant.now()
@@ -56,14 +56,14 @@ object SyncEngine {
             for (chunk in records.chunked(50)) {
                 val arr = JSONArray()
                 for (r in chunk) arr.put(toJson(r, methodName))
-                if (!ApiClient.sync(ctx, methodName, arr.toString(), token)) { ok = false; break }
+                if (!ApiClient.sync(ctx, methodName, arr.toString(), tok)) { ok = false; break }
                 uploaded += chunk.size
             }
             if (ok) {
                 Prefs.setLastSyncMs(ctx, methodName, now.toEpochMilli())
                 sb.append("$methodName: $uploaded uploaded\n")
             } else {
-                sb.append("$methodName: ERROR after $uploaded (will retry)\n")
+                sb.append("$methodName: ERROR after $uploaded (will retry next sync)\n")
             }
         }
         return sb.toString()
@@ -76,19 +76,19 @@ object SyncEngine {
         end: Instant
     ): List<Record> {
         val all = mutableListOf<Record>()
-        var token: String? = null
+        var pageToken: String? = null
         do {
             val resp = client.readRecords(
                 ReadRecordsRequest(
                     recordType = kclass,
                     timeRangeFilter = TimeRangeFilter.between(start, end),
                     pageSize = 1000,
-                    pageToken = token
+                    pageToken = pageToken
                 )
             )
             all.addAll(resp.records)
-            token = resp.pageToken
-        } while (token != null)
+            pageToken = resp.pageToken
+        } while (pageToken != null)
         return all
     }
 
@@ -102,7 +102,8 @@ object SyncEngine {
         put("lastModifiedTime", iso(r.metadata.lastModifiedTime))
     }
 
-    private fun energyJson(e: Energy): JSONObject = JSONObject().put("inKilocalories", e.inKilocalories)
+    private fun energyJson(e: Energy): JSONObject =
+        JSONObject().put("inKilocalories", e.inKilocalories)
 
     private fun toJson(r: Record, methodName: String): JSONObject {
         val o = JSONObject()
@@ -132,7 +133,7 @@ object SyncEngine {
             }
             is WeightRecord -> {
                 o.put("time", iso(r.time))
-                o.put("weight", JSONObject().put("inKilograms", r.inKilograms))
+                o.put("weight", JSONObject().put("inKilograms", r.weight.inKilograms))
             }
             is BodyFatRecord -> {
                 o.put("time", iso(r.time))
@@ -152,18 +153,23 @@ object SyncEngine {
                 o.put("beatsPerMinute", r.beatsPerMinute)
             }
             is BasalMetabolicRateRecord -> {
-                o.put("startTime", iso(r.startTime)); o.put("endTime", iso(r.endTime))
+                o.put("time", iso(r.time))
                 o.put("energy", energyJson(r.energy))
             }
             is NutritionRecord -> {
                 o.put("startTime", iso(r.startTime)); o.put("endTime", iso(r.endTime))
                 if (r.name != null) o.put("name", r.name)
-                if (r.mealType != null) o.put("mealType", r.mealType)
-                val items = JSONArray()
-                for (x in r.items) items.put(JSONObject()
-                    .put("name", x.name ?: JSONObject.NULL)
-                    .put("energy", x.energy?.let { energyJson(it) } ?: JSONObject.NULL))
-                o.put("items", items)
+                o.put("mealType", r.mealType)
+                val nutrients = JSONObject()
+                for ((nutrient, total) in r.nutrients) {
+                    when {
+                        nutrient == NutritionRecord.Nutrient.ENERGY && total is Energy ->
+                            nutrients.put("energy", energyJson(total))
+                        total is Mass -> nutrients.put(nutrient.name, JSONObject().put("inGrams", total.inGrams))
+                        total is Energy -> nutrients.put(nutrient.name, energyJson(total))
+                    }
+                }
+                o.put("nutrients", nutrients)
             }
             else -> throw IllegalArgumentException("Unhandled record type $methodName")
         }
