@@ -199,7 +199,7 @@ class MainActivity : ComponentActivity() {
             HealthPermission.getReadPermission(RestingHeartRateRecord::class),
             HealthPermission.getReadPermission(BasalMetabolicRateRecord::class),
             HealthPermission.getReadPermission(NutritionRecord::class),
-            HealthPermission.getReadPermission(HrvRecord::class),
+            HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class),
             HealthPermission.getReadPermission(OxygenSaturationRecord::class),
             HealthPermission.getReadPermission(RespiratoryRateRecord::class),
             HealthPermission.getReadPermission(Vo2MaxRecord::class),
