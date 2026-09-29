@@ -82,12 +82,13 @@ object SyncEngine {
                     error = classify(e, uploaded)
                     break
                 }
-                val jsons = resp.records.map { toJson(it, methodName).toString() }
+                // CRITICAL: put the JSONObject itself, NOT a string — an array of strings 500s on the server (it does item["metadata"] on each entry)
+                val jsons = resp.records.map { toJson(it, methodName) }
                 var i = 0
                 while (i < jsons.size && error == null) {
                     val chunk = jsons.subList(i, minOf(i + CHUNK, jsons.size))
                     val arr = JSONArray()
-                    for (s in chunk) arr.put(s)
+                    for (rec in chunk) arr.put(rec)
                     val err = try {
                         ApiClient.sync(ctx, methodName, arr.toString(), token)
                     } catch (e: Exception) {
