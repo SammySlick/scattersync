@@ -21,6 +21,10 @@ import java.util.Date
 
 class MainActivity : ComponentActivity() {
 
+    // Bump with every build so the status screen shows WHICH apk is running.
+    // Fixes the "which build am I actually testing?" guessing game.
+    private val BUILD_TAG = "build 2026-09-29 #14 (dataOrigin + IO + 16 types)"
+
     private lateinit var status: TextView
 
     private val permissionRequest =
@@ -51,8 +55,8 @@ class MainActivity : ComponentActivity() {
             setPadding(16, 16, 16, 16)
         }
         root.addView(TextView(this).apply {
-            text = "ScatterSync"
-            textSize = 22f
+            text = "ScatterSync — $BUILD_TAG"
+            textSize = 18f
             gravity = Gravity.CENTER
             setPadding(0, 32, 0, 8)
         })
