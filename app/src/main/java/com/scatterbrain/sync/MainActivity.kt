@@ -127,7 +127,7 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun refreshStatus() {
         val client = HealthConnectClient.getOrCreate(this@MainActivity)
-        val granted = HealthPermission.getGrantedPermissions(client)
+        val granted = PermissionController.getGrantedPermissions(client)
         val missing = PERMISSIONS.filterNot { it in granted }
         val permLine = if (missing.isEmpty())
             "All Health Connect permissions granted."
