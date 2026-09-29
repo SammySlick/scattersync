@@ -154,7 +154,7 @@ object SyncEngine {
             }
             is BasalMetabolicRateRecord -> {
                 o.put("time", iso(r.time))
-                o.put("basalMetabolicRate", JSONObject().put("inWatts", r.basalMetabolicRate.watts))
+                o.put("basalMetabolicRate", JSONObject().put("inWatts", r.basalMetabolicRate.inWatts))
             }
             is NutritionRecord -> {
                 o.put("startTime", iso(r.startTime)); o.put("endTime", iso(r.endTime))
