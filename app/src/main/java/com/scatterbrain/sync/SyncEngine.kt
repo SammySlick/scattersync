@@ -68,7 +68,6 @@ object SyncEngine {
         }
         sb.toString()
     }
-    }
 
     private suspend fun readAll(
         client: HealthConnectClient,
