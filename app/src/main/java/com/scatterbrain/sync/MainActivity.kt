@@ -1,126 +1,151 @@
 package com.scatterbrain.sync
 
-import androidx.activity.ComponentActivity
 import android.os.Bundle
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
-import androidx.health.connect.client.HealthConnectClient
+import androidx.activity.ComponentActivity
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.*
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import java.text.DateFormat
+import java.util.Date
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var status: TextView
-    private lateinit var syncButton: Button
-    private var requestPermissions =
+
+    private val permissionRequest =
         registerForActivityResult(PermissionController.createRequestPermissionResultContract()) { _ ->
-            checkPermissionsAndPrompt()
+            lifecycleScope.launch { refreshStatus() }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         status = TextView(this).apply {
             setPadding(48, 48, 48, 24)
             textSize = 14f
             text = "Starting…"
         }
+
         val urlField = EditText(this).apply { hint = "Server URL"; setText(Prefs.server(this@MainActivity)) }
         val userField = EditText(this).apply { hint = "Username"; setText(Prefs.username(this@MainActivity)) }
         val passField = EditText(this).apply { hint = "Password"; setText(Prefs.password(this@MainActivity)) }
-        syncButton = Button(this).apply { text = "Grant Health Connect permissions" }
+
+        val grantBtn = Button(this).apply { text = "Grant Health Connect permissions" }
+        val saveBtn = Button(this).apply { text = "Save settings" }
+        val syncBtn = Button(this).apply { text = "Sync now" }
+        val schedBtn = Button(this).apply { text = "Enable 30-min background sync" }
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            setPadding(16, 16, 16, 16)
         }
-        val scroll = ScrollView(this).apply { addView(status) }
-        fun addField(f: EditText, label: String) {
-            val lbl = TextView(this).apply { text = label; setPadding(48, 24, 48, 4); textSize = 12f }
-            root.addView(lbl)
+        root.addView(TextView(this).apply {
+            text = "ScatterSync"
+            textSize = 22f
+            gravity = Gravity.CENTER
+            setPadding(0, 32, 0, 8)
+        })
+        root.addView(status)
+        root.addView(grantBtn)
+        root.addView(TextView(this).apply {
+            text = "Server settings"
+            textSize = 12f
+            setPadding(48, 32, 48, 4)
+        })
+        for (f in listOf(urlField, userField, passField)) {
             root.addView(f, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                setMargins(32, 0, 32, 0)
-            })
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(32, 0, 32, 0) })
         }
-        addField(urlField, "Server URL")
-        addField(userField, "Username")
-        addField(passField, "Password")
-
-        val save = Button(this).apply { text = "Save settings" }
-        val syncNow = Button(this).apply { text = "Sync now" }
-        val schedule = Button(this).apply { text = "Enable 30-min background sync" }
-
-        fun rows() {
-            root.removeAllViewsInLayout()
-            root.addView(TextView(this).apply {
-                text = "ScatterSync"; textSize = 20f; setPadding(48, 48, 48, 8); gravity = Gravity.CENTER
-            })
-            root.addView(status)
-            root.addView(syncButton)
-            root.addView(TextView(this).apply { text = "Server settings"; setPadding(48, 32, 48, 4); textSize = 12f })
-            root.addView(urlField, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { setMargins(32, 0, 32, 0) })
-            root.addView(userField, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { setMargins(32, 0, 32, 0) })
-            root.addView(passField, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { setMargins(32, 0, 32, 0) })
-            root.addView(save, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { setMargins(32, 16, 32, 0) })
-            root.addView(syncNow, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { setMargins(32, 0, 32, 0) })
-            root.addView(schedule, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { setMargins(32, 0, 32, 32) })
+        for (b in listOf(saveBtn, syncBtn, schedBtn)) {
+            root.addView(b, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(32, 16, 32, 0) })
         }
-        rows()
+        setContentView(root)
 
-        save.setOnClickListener {
-            Prefs.server = urlField.text.toString().trim()
-            Prefs.username = userField.text.toString().trim()
-            Prefs.password = passField.text.toString()
-            updateStatus("Settings saved. Token will be created on next sync.")
+        fun saveFields() {
+            Prefs.setServer(this@MainActivity, urlField.text.toString().trim())
+            Prefs.setUsername(this@MainActivity, userField.text.toString().trim())
+            Prefs.setPassword(this@MainActivity, passField.text.toString())
+            Prefs.setToken(this@MainActivity, null)
         }
-        syncNow.setOnClickListener {
-            Prefs.server = urlField.text.toString().trim()
-            Prefs.username = userField.text.toString().trim()
-            Prefs.password = passField.text.toString()
-            updateStatus("Syncing…")
+
+        grantBtn.setOnClickListener {
+            permissionRequest.launch(PERMISSIONS.toTypedArray())
+        }
+
+        saveBtn.setOnClickListener {
+            saveFields()
+            updateStatus("Settings saved.")
+            lifecycleScope.launch { refreshStatus() }
+        }
+
+        syncBtn.setOnClickListener {
+            saveFields()
+            updateStatus("Syncing… (this can take a while on first run)")
             lifecycleScope.launch {
-                val summary = SyncEngine.run(this@MainActivity, manual = true)
+                val summary = try {
+                    SyncEngine.run(this@MainActivity, manual = true)
+                } catch (e: Exception) {
+                    "Sync error: ${e.message}"
+                }
                 updateStatus(summary)
             }
         }
-        schedule.setOnClickListener {
+
+        schedBtn.setOnClickListener {
             Scheduler.ensure(this)
             updateStatus(status.text.toString() + "\nBackground sync scheduled every 30 min.")
         }
-        syncButton.setOnClickListener {
-            requestPermissions.launch(HealthPermission.PERMISSIONS)
-        }
 
-        lifecycleScope.launch { checkPermissionsAndPrompt() }
+        lifecycleScope.launch { refreshStatus() }
     }
 
     private fun updateStatus(s: String) {
-        runOnUiThread { status.text = buildString {
+        status.text = buildString {
             append(s)
             append("\n\nLast sync per type:")
-            append(SyncEngine.lastSyncSummary())
-        } }
+            for (m in SyncEngine.typeClasses.keys) {
+                val ms = Prefs.lastSyncMs(this@MainActivity, m)
+                val t = if (ms == 0L) "never" else DateFormat.getDateTimeInstance().format(Date(ms))
+                append("\n  $m: $t")
+            }
+        }
     }
 
-    private suspend fun checkPermissionsAndPrompt() {
-        val granted = HealthPermission.getGrantedPermissions(this)
-        val missing = HealthPermission.PERMISSIONS.filterNot { it in granted }
-        status.text = if (missing.isEmpty())
-            "All Health Connect permissions granted.\nServer: ${Prefs.server}"
-        else "Missing ${missing.size} permissions — tap the button below.\nServer: ${Prefs.server}"
+    private suspend fun refreshStatus() {
+        val client = HealthConnectClient.getOrCreate(this@MainActivity)
+        val granted = HealthPermission.getGrantedPermissions(this@MainActivity)
+        val missing = PERMISSIONS.filterNot { it in granted }
+        val permLine = if (missing.isEmpty())
+            "All Health Connect permissions granted."
+        else "Missing ${missing.size} permissions — tap Grant."
+        status.text = "$permLine\nServer: ${Prefs.server(this@MainActivity)}"
+    }
+
+    companion object {
+        val PERMISSIONS: Set<String> = setOf(
+            HealthPermission.getReadPermission(HeartRateRecord::class),
+            HealthPermission.getReadPermission(StepsRecord::class),
+            HealthPermission.getReadPermission(SleepSessionRecord::class),
+            HealthPermission.getReadPermission(WeightRecord::class),
+            HealthPermission.getReadPermission(BodyFatRecord::class),
+            HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+            HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
+            HealthPermission.getReadPermission(RestingHeartRateRecord::class),
+            HealthPermission.getReadPermission(BasalMetabolicRateRecord::class),
+            HealthPermission.getReadPermission(NutritionRecord::class)
+        )
     }
 }
