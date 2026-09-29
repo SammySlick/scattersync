@@ -34,7 +34,9 @@ object SyncEngine {
     suspend fun run(ctx: Context, manual: Boolean): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         var token: String? = Prefs.token(ctx)
         if (token == null || token.isEmpty()) {
-            token = ApiClient.login(ctx) ?: return@withContext "Login failed — check server URL, username and password."
+            token = try { ApiClient.login(ctx) } catch (e: Exception) {
+                return@withContext "Login failed: ${e.message} (check server URL, username, password)"
+            }
             Prefs.setToken(ctx, token)
         }
         val tok = token!!
@@ -56,7 +58,8 @@ object SyncEngine {
             for (chunk in records.chunked(50)) {
                 val arr = JSONArray()
                 for (r in chunk) arr.put(toJson(r, methodName))
-                if (!ApiClient.sync(ctx, methodName, arr.toString(), tok)) { ok = false; break }
+                val err = ApiClient.sync(ctx, methodName, arr.toString(), tok)
+                if (err != null) { sb.append("$methodName chunk failed: $err\n"); ok = false; break }
                 uploaded += chunk.size
             }
             if (ok) {
