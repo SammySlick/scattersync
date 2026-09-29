@@ -154,14 +154,12 @@ object SyncEngine {
             }
             is BasalMetabolicRateRecord -> {
                 o.put("time", iso(r.time))
-                o.put("basalMetabolicRate", JSONObject().put("inWatts", r.basalMetabolicRate.inWatts))
-                o.put("kilocaloriesPerDay", r.kilocaloriesPerDay)
+                o.put("basalMetabolicRate", JSONObject().put("inWatts", r.basalMetabolicRate.watts))
             }
             is NutritionRecord -> {
                 o.put("startTime", iso(r.startTime)); o.put("endTime", iso(r.endTime))
                 if (r.name != null) o.put("name", r.name)
                 o.put("mealType", r.mealType)
-                if (r.grams != null) o.put("grams", r.grams)
                 val nutrients = JSONObject()
                 r.energy?.let { nutrients.put("energy", energyJson(it)) }
                 r.protein?.let { nutrients.put("protein", JSONObject().put("inGrams", it.inGrams)) }
