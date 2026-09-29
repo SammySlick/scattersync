@@ -34,7 +34,7 @@ object SyncEngine {
     suspend fun run(ctx: Context, manual: Boolean): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         var token: String? = Prefs.token(ctx)
         if (token == null || token.isEmpty()) {
-            token = ApiClient.login(ctx) ?: return "Login failed — check server URL, username and password."
+            token = ApiClient.login(ctx) ?: return@withContext "Login failed — check server URL, username and password."
             Prefs.setToken(ctx, token)
         }
         val tok = token!!
