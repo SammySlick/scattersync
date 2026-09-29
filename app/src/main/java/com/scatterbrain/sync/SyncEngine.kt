@@ -31,7 +31,7 @@ object SyncEngine {
         "Nutrition" to NutritionRecord::class
     )
 
-    suspend fun run(ctx: Context, manual: Boolean): String {
+    suspend fun run(ctx: Context, manual: Boolean): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         var token: String? = Prefs.token(ctx)
         if (token == null || token.isEmpty()) {
             token = ApiClient.login(ctx) ?: return "Login failed — check server URL, username and password."
@@ -66,7 +66,8 @@ object SyncEngine {
                 sb.append("$methodName: ERROR after $uploaded (will retry next sync)\n")
             }
         }
-        return sb.toString()
+        sb.toString()
+    }
     }
 
     private suspend fun readAll(
