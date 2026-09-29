@@ -25,7 +25,7 @@ object SyncEngine {
         "RestingHeartRate" to RestingHeartRateRecord::class,
         "BasalMetabolicRate" to BasalMetabolicRateRecord::class,
         "Nutrition" to NutritionRecord::class,
-        "HRV" to HrvRecord::class,
+        "HRV" to HeartRateVariabilityRmssdRecord::class,
         "OxygenSaturation" to OxygenSaturationRecord::class,
         "RespiratoryRate" to RespiratoryRateRecord::class,
         "Vo2Max" to Vo2MaxRecord::class,
@@ -145,7 +145,7 @@ object SyncEngine {
                 if (rec.notes != null) d.put("notes", rec.notes)
                 val st = JSONArray()
                 for (g in rec.stages) {
-                    st.put(JSONObject().put("startTime", iso(g.startTime)).put("endTime", iso(g.endTime)).put("stage", g.stage.name))
+                    st.put(JSONObject().put("startTime", iso(g.startTime)).put("endTime", iso(g.endTime)).put("stage", g.stage))
                 }
                 d.put("stages", st); o.put("data", d)
             }
@@ -179,17 +179,9 @@ object SyncEngine {
                 rec.totalFat?.let { d.put("fat", it.inGrams) }
                 o.put("data", d)
             }
-            is HrvRecord -> {
-                o.put("startTime", iso(rec.startTime)); o.put("endTime", iso(rec.endTime))
-                val d = JSONObject()
-                val s = JSONArray()
-                for (e in rec.samples) {
-                    val en = JSONObject().put("time", iso(e.time))
-                    e.rmssdMilliSeconds?.let { en.put("rmssd", it) }
-                    e.sdnnMilliSeconds?.let { en.put("sdnn", it) }
-                    s.put(en)
-                }
-                d.put("samples", s); o.put("data", d)
+            is HeartRateVariabilityRmssdRecord -> {
+                o.put("startTime", iso(rec.time)); o.put("endTime", iso(rec.time))
+                o.put("data", JSONObject().put("rmssd", rec.heartRateVariabilityMillis))
             }
             is OxygenSaturationRecord -> {
                 o.put("startTime", iso(rec.time)); o.put("endTime", iso(rec.time))
