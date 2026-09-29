@@ -120,6 +120,10 @@ object SyncEngine {
     private fun meta(rec: Record): JSONObject {
         val md = JSONObject()
         md.put("id", rec.metadata.id)
+        // Server REQUIREMENTS: metadata.dataOrigin must exist — upstream
+        // hcgateway does item['metadata']['dataOrigin'] with no fallback,
+        // so a missing key 500s every upload.
+        md.put("dataOrigin", rec.metadata.dataOrigin ?: "com.scatterbrain.sync")
         return md
     }
 
