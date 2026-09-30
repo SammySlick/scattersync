@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
 
     // Bump with every build so the status screen shows WHICH apk is running.
     // Fixes the "which build am I actually testing?" guessing game.
-    private val BUILD_TAG = "build 2026-09-30 #17 (foreground-service sync)"
+    private val BUILD_TAG = "build 2026-09-30 #18 (visible background syncs)"
 
     private lateinit var status: TextView
 
@@ -36,6 +36,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Self-arm the scheduler: no manual "Schedule" presses needed after a
+        // reinstall — opening the app once is enough.
+        try { Scheduler.ensure(this) } catch (e: Exception) { e.printStackTrace() }
 
         // Ask for notification permission (Android 13+) so the foreground-sync
         // notification can show — without it the FGS exemption may not hold.
@@ -207,7 +211,14 @@ class MainActivity : ComponentActivity() {
         val permLine = if (missing.isEmpty())
             "All Health Connect permissions granted."
         else "Missing ${missing.size} permissions — tap Grant."
-        status.text = "$sdkLine\n$permLine\nServer: ${Prefs.server(this@MainActivity)}"
+        val user = Prefs.username(this@MainActivity)
+        val credLine = if (user.isBlank())
+            "Credentials: MISSING — enter username and password below, then Save settings."
+        else "Credentials: set (user: $user)"
+        val bg = Prefs.lastBgMs(this@MainActivity)
+        val bgLine = if (bg == 0L) Prefs.lastBgSummary(this@MainActivity)
+        else "Last background sync ${DateFormat.getDateTimeInstance().format(Date(bg))}:\n${Prefs.lastBgSummary(this@MainActivity)}"
+        status.text = "$sdkLine\n$permLine\n$credLine\nServer: ${Prefs.server(this@MainActivity)}\n\n$bgLine"
     }
 
     companion object {
