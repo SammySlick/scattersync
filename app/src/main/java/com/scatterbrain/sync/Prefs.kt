@@ -24,4 +24,11 @@ object Prefs {
     fun lastSyncMs(ctx: Context, type: String): Long = sp(ctx).getLong("last_$type", 0L)
     fun setLastSyncMs(ctx: Context, type: String, ms: Long) =
         sp(ctx).edit().putLong("last_$type", ms).apply()
+
+    // Background-run visibility: the worker persists what it did (or why it
+    // failed) so the UI can show real background activity instead of "never".
+    fun lastBgMs(ctx: Context): Long = sp(ctx).getLong("last_bg", 0L)
+    fun setLastBgMs(ctx: Context, ms: Long) = sp(ctx).edit().putLong("last_bg", ms).apply()
+    fun lastBgSummary(ctx: Context): String = sp(ctx).getString("last_bg_summary", "(no background sync has run yet)") ?: ""
+    fun setLastBgSummary(ctx: Context, s: String) = sp(ctx).edit().putString("last_bg_summary", s).apply()
 }
