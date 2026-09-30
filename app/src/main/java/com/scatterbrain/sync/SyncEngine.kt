@@ -61,6 +61,9 @@ object SyncEngine {
             Prefs.setToken(ctx, token)
         }
         for ((methodName, kclass) in typeClasses) {
+            // Refresh the token from Prefs between types: ApiClient may have
+            // re-logged in after an expired-token error during the previous type.
+            token = Prefs.token(ctx) ?: token
             val last = Prefs.lastSyncMs(ctx, methodName)
             val start = if (last == 0L) now.minus(30, ChronoUnit.DAYS) else Instant.ofEpochMilli(last)
             // STREAMING: read one page, upload, discard. Never buffer the whole
@@ -97,6 +100,25 @@ object SyncEngine {
                     if (err != null) { error = err; break }
                     uploaded += chunk.size
                     i += CHUNK
+                    // INCREMENTAL CHECKPOINT: after every successful chunk, advance
+                    // this type's lastSync to the newest record end uploaded. Without
+                    // this, a type that never finishes one clean full pass (HR's
+                    // month-long backfill vs timeouts and hourly quotas) would
+                    // re-read and re-upload the whole month from scratch every run.
+                    var maxEnd = last
+                    for (rec in chunk) {
+                        var t = rec.optString("end", "")
+                        if (t.isNullOrEmpty()) t = rec.optString("start", "")
+                        if (!t.isNullOrEmpty()) {
+                            try {
+                                val ms = java.time.OffsetDateTime.parse(t).toInstant().toEpochMilli()
+                                if (ms > maxEnd) maxEnd = ms
+                            } catch (_: Exception) { /* unparseable timestamp — skip */ }
+                        }
+                    }
+                    if (maxEnd > last) {
+                        Prefs.setLastSyncMs(ctx, methodName, maxEnd - 60_000L) // 60s overlap guard
+                    }
                 }
                 pageToken = if (error == null) resp.pageToken else null
             } while (pageToken != null)

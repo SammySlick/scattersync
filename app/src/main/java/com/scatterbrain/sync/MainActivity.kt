@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
 
     // Bump with every build so the status screen shows WHICH apk is running.
     // Fixes the "which build am I actually testing?" guessing game.
-    private val BUILD_TAG = "build 2026-09-30 #18 (visible background syncs)"
+    private val BUILD_TAG = "build 2026-09-30 #19 (auto-relogin + incremental checkpoint)"
 
     private lateinit var status: TextView
 
