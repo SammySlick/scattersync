@@ -27,8 +27,11 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, 
             SyncEngine.run(applicationContext, manual = false)
         } catch (e: Exception) {
             e.printStackTrace()
-            null
+            "Background sync crashed: ${e.javaClass.simpleName}: ${e.message ?: "(no message)"}"
         }
+        // Persist the result so the status screen shows real background activity.
+        Prefs.setLastBgMs(applicationContext, System.currentTimeMillis())
+        Prefs.setLastBgSummary(applicationContext, summary ?: "(no result)")
         return Result.success()
     }
 
