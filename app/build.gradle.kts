@@ -18,6 +18,7 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("../scatter.keystore")
+            storeType = "PKCS12"
             storePassword = "scattersync"
             keyAlias = "scatter"
             keyPassword = "scattersync"
