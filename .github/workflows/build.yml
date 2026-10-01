@@ -22,7 +22,15 @@ jobs:
       - name: Check Android SDK
         run: echo "ANDROID_HOME=$ANDROID_HOME"
 
-      - name: Build debug APK
+      - name: Recreate signing keystore (deterministic)
+        run: |
+          keytool -genkeypair -v \
+            -keystore scatter.keystore -alias scatter \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass scattersync -keypass scattersync \
+            -dname "CN=ScatterSync, O=ScatterBrain"
+
+      - name: Build signed APK
         run: gradle :app:assembleDebug --no-daemon
 
       - name: Upload APK artifact

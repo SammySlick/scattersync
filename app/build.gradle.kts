@@ -15,9 +15,21 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("../scatter.keystore")
+            storePassword = "scattersync"
+            keyAlias = "scatter"
+            keyPassword = "scattersync"
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("release")
+        }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

@@ -37,6 +37,17 @@ object SyncEngine {
 
     private const val PAGE = 5000      // max records per read page
     private const val CHUNK = 50       // records per upload POST
+    private const val HR_CAP = 5000    // max HR records read per run (leaves HC quota for the rest)
+
+    // SYNC ORDER: cheap, small types FIRST so HR's massive minute-level reads
+    // can never eat the hourly HC read quota before food/weight/steps sync.
+    // HeartRate deliberately LAST and capped per run.
+    private val typeOrder = listOf(
+        "Nutrition", "Weight", "BodyFat", "Steps", "SleepSession",
+        "ExerciseSession", "TotalCaloriesBurned", "RestingHeartRate",
+        "BasalMetabolicRate", "OxygenSaturation", "RespiratoryRate", "HRV",
+        "Vo2Max", "Distance", "FloorsClimbed", "HeartRate"
+    )
 
     // Runs entirely on the IO dispatcher: blocking HTTP from the main thread
     // throws NetworkOnMainThreadException (which has a null message — the
@@ -60,7 +71,8 @@ object SyncEngine {
             }
             Prefs.setToken(ctx, token)
         }
-        for ((methodName, kclass) in typeClasses) {
+        for (methodName in typeOrder) {
+            val kclass = typeClasses[methodName] ?: continue
             // Refresh the token from Prefs between types: ApiClient may have
             // re-logged in after an expired-token error during the previous type.
             token = Prefs.token(ctx) ?: token
@@ -97,7 +109,15 @@ object SyncEngine {
                     } catch (e: Exception) {
                         e.message ?: e.javaClass.simpleName
                     }
-                    if (err != null) { error = err; break }
+                    if (err != null) {
+                        // SKIP-AND-CONTINUE: a bad chunk must not block the
+                        // type (or everything queued behind it). Record it and
+                        // move on to the next chunk.
+                        if (error == null) error = err
+                        sb.append("$methodName: skipped chunk of ${chunk.size} — $err\n")
+                        i += CHUNK
+                        continue
+                    }
                     uploaded += chunk.size
                     i += CHUNK
                     // INCREMENTAL CHECKPOINT: after every successful chunk, advance
@@ -119,6 +139,14 @@ object SyncEngine {
                     if (maxEnd > last) {
                         Prefs.setLastSyncMs(ctx, methodName, maxEnd - 60_000L) // 60s overlap guard
                     }
+                }
+                // HR CAP: after HR_CAP records this run, stop reading and let
+                // the next cycle continue from the checkpoint — protects the
+                // quota for other types and keeps runs short.
+                if (methodName == "HeartRate" && uploaded >= HR_CAP && error == null) {
+                    sb.append("$methodName: cap of $HR_CAP reached this run — continues next sync\n")
+                    pageToken = null
+                    continue
                 }
                 pageToken = if (error == null) resp.pageToken else null
             } while (pageToken != null)

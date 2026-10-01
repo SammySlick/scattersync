@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
 
     // Bump with every build so the status screen shows WHICH apk is running.
     // Fixes the "which build am I actually testing?" guessing game.
-    private val BUILD_TAG = "build 2026-09-30 #19 (auto-relogin + incremental checkpoint)"
+    private val BUILD_TAG = "build 2026-10-01 #20 (stable key + cheap-types-first + HR cap)"
 
     private lateinit var status: TextView
 
@@ -182,43 +182,50 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch { refreshStatus() }
     }
 
-    private fun updateStatus(s: String) {
-        status.text = buildString {
-            append(s)
-            append("\n\nLast sync per type:")
-            for (m in SyncEngine.typeClasses.keys) {
-                val ms = Prefs.lastSyncMs(this@MainActivity, m)
-                val t = if (ms == 0L) "never" else DateFormat.getDateTimeInstance().format(Date(ms))
-                append("\n  $m: $t")
-            }
+    // FULL STATUS ALWAYS: every update renders the environment block (HC,
+    // permissions, credentials, server, last background sync) plus the
+    // dynamic content, so the log never goes missing between refreshes.
+    private fun statusBlock(dynamic: String): String {
+        val sdkStatus = HealthConnectClient.getSdkStatus(this@MainActivity)
+        val sb = StringBuilder()
+        if (sdkStatus == HealthConnectClient.SDK_AVAILABLE) {
+            sb.append("Health Connect: available.")
+            val user = Prefs.username(this@MainActivity)
+            sb.append("\nCredentials: ").append(
+                if (user.isBlank()) "MISSING — enter username and password below, then Save settings."
+                else "set (user: $user)")
+            sb.append("\nServer: ").append(Prefs.server(this@MainActivity))
+            val bg = Prefs.lastBgMs(this@MainActivity)
+            sb.append("\n\nLast background sync ").append(
+                if (bg == 0L) "(none yet)" else DateFormat.getDateTimeInstance().format(Date(bg)))
+                .append(":\n").append(Prefs.lastBgSummary(this@MainActivity))
+        } else {
+            sb.append("Health Connect: NOT available on this phone.")
         }
+        sb.append("\n\n").append(dynamic)
+        sb.append("\n\nLast sync per type:")
+        for (m in SyncEngine.typeClasses.keys) {
+            val ms = Prefs.lastSyncMs(this@MainActivity, m)
+            val t = if (ms == 0L) "never" else DateFormat.getDateTimeInstance().format(Date(ms))
+            sb.append("\n  $m: $t")
+        }
+        return sb.toString()
+    }
+
+    private fun updateStatus(s: String) {
+        status.text = statusBlock(s)
     }
 
     private suspend fun refreshStatus() {
         val sdkStatus = HealthConnectClient.getSdkStatus(this@MainActivity)
-        val sdkLine = when (sdkStatus) {
-            HealthConnectClient.SDK_AVAILABLE -> "Health Connect: available."
-            HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> "Health Connect: needs install/update from Play Store."
-            else -> "Health Connect: NOT available on this phone."
-        }
-        if (sdkStatus != HealthConnectClient.SDK_AVAILABLE) {
-            status.text = "$sdkLine\nTap Grant for details. Install/update Health Connect, then reopen this app."
-            return
-        }
-        val client = HealthConnectClient.getOrCreate(this@MainActivity)
-        val granted = client.permissionController.getGrantedPermissions()
-        val missing = PERMISSIONS.filterNot { it in granted }
-        val permLine = if (missing.isEmpty())
-            "All Health Connect permissions granted."
-        else "Missing ${missing.size} permissions — tap Grant."
-        val user = Prefs.username(this@MainActivity)
-        val credLine = if (user.isBlank())
-            "Credentials: MISSING — enter username and password below, then Save settings."
-        else "Credentials: set (user: $user)"
-        val bg = Prefs.lastBgMs(this@MainActivity)
-        val bgLine = if (bg == 0L) Prefs.lastBgSummary(this@MainActivity)
-        else "Last background sync ${DateFormat.getDateTimeInstance().format(Date(bg))}:\n${Prefs.lastBgSummary(this@MainActivity)}"
-        status.text = "$sdkLine\n$permLine\n$credLine\nServer: ${Prefs.server(this@MainActivity)}\n\n$bgLine"
+        val dynamic = if (sdkStatus == HealthConnectClient.SDK_AVAILABLE) {
+            val client = HealthConnectClient.getOrCreate(this@MainActivity)
+            val granted = client.permissionController.getGrantedPermissions()
+            val missing = PERMISSIONS.filterNot { it in granted }
+            if (missing.isEmpty()) "All Health Connect permissions granted."
+            else "Missing ${missing.size} permissions — tap Grant."
+        } else "Tap Grant for details. Install/update Health Connect, then reopen this app."
+        updateStatus(dynamic)
     }
 
     companion object {
