@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
 
     // Bump with every build so the status screen shows WHICH apk is running.
     // Fixes the "which build am I actually testing?" guessing game.
-    private val BUILD_TAG = "build 2026-10-03 #21 (essentials-first sync order + battery exemption)"
+    private val BUILD_TAG = "build 2026-10-03 #22 (essentials-first + battery exemption + KEEP scheduler)"
 
     private lateinit var status: TextView
 
