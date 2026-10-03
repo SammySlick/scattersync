@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
 
     // Bump with every build so the status screen shows WHICH apk is running.
     // Fixes the "which build am I actually testing?" guessing game.
-    private val BUILD_TAG = "build 2026-10-01 #20 (stable key + cheap-types-first + HR cap)"
+    private val BUILD_TAG = "build 2026-10-03 #21 (essentials-first sync order + battery exemption)"
 
     private lateinit var status: TextView
 
@@ -71,6 +71,7 @@ class MainActivity : ComponentActivity() {
         val saveBtn = Button(this).apply { text = "Save settings" }
         val syncBtn = Button(this).apply { text = "Sync now" }
         val schedBtn = Button(this).apply { text = "Enable 30-min background sync" }
+        val batteryBtn = Button(this).apply { text = "Allow unrestricted battery (fixes missed syncs)" }
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -119,7 +120,7 @@ class MainActivity : ComponentActivity() {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { setMargins(32, 0, 32, 0) })
         }
-        for (b in listOf(saveBtn, syncBtn, schedBtn)) {
+        for (b in listOf(saveBtn, syncBtn, schedBtn, batteryBtn)) {
             root.addView(b, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -179,6 +180,29 @@ class MainActivity : ComponentActivity() {
             updateStatus(status.text.toString() + "\nBackground sync scheduled every 30 min.")
         }
 
+        batteryBtn.setOnClickListener {
+            // Android's Doze + OEM battery managers silently defer WorkManager
+            // periodic jobs for "optimized" apps — the #1 cause of missed
+            // background syncs. Asking for the exemption fixes it system-wide.
+            try {
+                val pm = getSystemService(android.os.PowerManager::class.java)
+                if (pm.isIgnoringBatteryOptimizations(packageName)) {
+                    Toast.makeText(this, "Already unrestricted — no action needed.", Toast.LENGTH_LONG).show()
+                } else {
+                    startActivity(android.content.Intent(
+                        android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                        android.net.Uri.parse("package:$packageName")))
+                }
+            } catch (e: Exception) {
+                try {
+                    startActivity(android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                } catch (e2: Exception) {
+                    updateStatus(status.text.toString() + "\nCould not open battery settings: " + e2.message)
+                }
+            }
+            lifecycleScope.launch { kotlinx.coroutines.delay(1500); refreshStatus() }
+        }
+
         lifecycleScope.launch { refreshStatus() }
     }
 
@@ -202,6 +226,11 @@ class MainActivity : ComponentActivity() {
         } else {
             sb.append("Health Connect: NOT available on this phone.")
         }
+        sb.append("\nBattery: ").append(
+            if (Build.VERSION.SDK_INT < 23) "(n/a)"
+            else if ((getSystemService(android.os.PowerManager::class.java))
+                .isIgnoringBatteryOptimizations(packageName)) "unrestricted — good"
+            else "OPTIMISED — background syncs may be skipped by Doze. Tap 'Allow unrestricted battery'.")
         sb.append("\n\n").append(dynamic)
         sb.append("\n\nLast sync per type:")
         for (m in SyncEngine.typeClasses.keys) {

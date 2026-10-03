@@ -39,14 +39,17 @@ object SyncEngine {
     private const val CHUNK = 50       // records per upload POST
     private const val HR_CAP = 5000    // max HR records read per run (leaves HC quota for the rest)
 
-    // SYNC ORDER: cheap, small types FIRST so HR's massive minute-level reads
-    // can never eat the hourly HC read quota before food/weight/steps sync.
-    // HeartRate deliberately LAST and capped per run.
+    // SYNC ORDER: daily-essential types FIRST so no backfill can eat the hourly
+    // HC read quota before sleep/weight/steps sync. Build #20 claimed this but
+    // put Nutrition FIRST — the biggest type (Sam's backfill: 6,235 records,
+    // quota died before Weight/Steps/Sleep attempted a single read). Fix #21:
+    // Nutrition is the LARGEST type (many records per day from MFP), so it goes
+    // LAST; HeartRate stays capped and second-to-last.
     private val typeOrder = listOf(
-        "Nutrition", "Weight", "BodyFat", "Steps", "SleepSession",
-        "ExerciseSession", "TotalCaloriesBurned", "RestingHeartRate",
-        "BasalMetabolicRate", "OxygenSaturation", "RespiratoryRate", "HRV",
-        "Vo2Max", "Distance", "FloorsClimbed", "HeartRate"
+        "SleepSession", "Steps", "Weight", "BodyFat", "RestingHeartRate",
+        "BasalMetabolicRate", "ExerciseSession", "TotalCaloriesBurned",
+        "HRV", "OxygenSaturation", "RespiratoryRate", "Vo2Max", "Distance",
+        "FloorsClimbed", "HeartRate", "Nutrition"
     )
 
     // Runs entirely on the IO dispatcher: blocking HTTP from the main thread
